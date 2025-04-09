@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>火箭升空博弈遊戲</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.min.js"></script>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      background-color: #f5f5f5;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+    .game-container {
+      max-width: 500px;
+      width: 100%;
+    }
+    .game-title {
+      text-align: center;
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 16px;
+    }
+    .game-screen {
+      position: relative;
+      width: 100%;
+      height: 300px;
+      overflow: hidden;
+      margin-bottom: 16px;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      transition: background 0.5s ease;
+    }
+    .sky {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(to bottom, #6fb1e6, #c5e4ff);
+      transition: opacity 1s ease;
+    }
+    .space {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(to bottom, #000033, #000066);
+      opacity: 0;
+      transition: opacity 1s ease;
+    }
+    .star {
+      position: absolute;
+      background-color: white;
+      border-radius: 50%;
+      animation: twinkle 1.5s infinite alternate;
+    }
+    @keyframes twinkle {
+      0% { opacity: 0.3; }
+      100% { opacity: 1; }
+    }
+    .ground {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      height: 10px;
+      background: repeating-linear-gradient(90deg, #7c6a35, #8b7a3d 50px, #7c6a35 100px);
+      transition: opacity 1s ease;
+    }
+    .cloud {
+      position: absolute;
+      fill: white;
+      stroke: #ddd;
+      stroke-width: 1;
+      transition: opacity 1s ease;
+    }
+    .rocket {
+      position: absolute;
+      bottom: 10px;
+      transition: left 2s ease-out;
+      z-index: 10;
+    }
+    .multiplier {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: rgba(255, 255, 255, 0.7);
+      padding: 5px 15px;
+      border-radius: 20px;
+      font-size: 18px;
+      font-weight: bold;
+      z-index: 20;
+    }
+    .controls {
+      background-color: white;
+      padding: 16px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .balance-display {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .bet-input {
+      display: flex;
+      margin-bottom: 16px;
+    }
+    .bet-input input {
+      flex: 1;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px 0 0 4px;
+    }
+    .bet-input button {
+      padding: 8px 16px;
+      background-color: #4c7cff;
+      color: white;
+      border: none;
+      border-radius: 0 4px 4px 0;
+      cursor: pointer;
+    }
+    .bet-input button:disabled {
+      background-color: #cccccc;
+    }
+    .cashout {
+      width: 100%;
+      padding: 10px;
+      background-color: #4caf50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-bottom: 16px;
+    }
+    .cashout:disabled {
+      background-color: #cccccc;
+    }
+    .start-button {
+      width: 100%;
+      padding: 10px;
+      background-color: #9c27b0;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .history {
+      margin-top: 16px;
+      background-color: white;
+      padding: 16px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .history-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .profit-positive {
+      color: #4caf50;
+    }
+    .profit-negative {
+      color: #f44336;
+    }
+    .result-success {
+      color: #4caf50;
+    }
+    .result-explosion {
+      color: #f44336;
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="game-container">
+    <div class="game-title">火箭升空博弈遊戲</div>
+    
+    <!-- 遊戲畫面 -->
+    <div class="game-screen">
+      <!-- 天空背景 -->
+      <div class="sky" :style="{ opacity: spaceOpacity > 0.8 ? 0.2 : 1 }"></div>
+      
+      <!-- 太空背景 -->
+      <div class="space" :style="{ opacity: spaceOpacity }"></div>
+      
+      <!-- 星星 -->
+      <div 
+        v-for="(star, index) in stars" 
+        :key="'star-'+index" 
+        class="star" 
+        :style="{ 
+          left: `${star.x - (multiplier.value > 2 ? starPosition : 0)}px`, 
+          top: star.y + 'px', 
+          width: star.size + 'px', 
+          height: star.size + 'px',
+          opacity: spaceOpacity * star.brightness
+        }"
+      ></div>
+      
+      <!-- 雲朵 -->
+      <svg 
+        v-for="(cloud, index) in clouds" 
+        :key="'cloud-'+index" 
+        class="cloud" 
+        :style="{ 
+          left: `${cloud.x - (showMovingBackground ? cloudPosition : 0)}px`, 
+          top: cloud.y + 'px',
+          opacity: spaceOpacity > 0.7 ? 1 - spaceOpacity : 1
+        }"
+        width="60" 
+        height="30" 
+        viewBox="0 0 60 30"
+      >
+        <path d="M10,20 Q15,10 25,15 Q35,5 45,15 Q55,15 50,25 Q55,30 40,30 Q30,35 20,30 Q5,30 10,20" fill="white" stroke="#ccc" />
+      </svg>
+      
+      <!-- 地面 -->
+      <div class="ground" :style="{ 
+        opacity: showMovingBackground ? (spaceOpacity > 0.5 ? 1 - spaceOpacity : 1) : 1
+      }"></div>
+      
+      <!-- 火箭 -->
+      <div class="rocket" :style="{ 
+        left: rocketLeftPosition + '%', 
+        bottom: rocketVerticalPosition + 'px'
+      }">
+        <svg width="60" height="40" viewBox="0 0 60 40">
+          <g v-if="gameState === 'exploded'">
+            <!-- 爆炸效果 -->
+            <circle cx="30" cy="20" r="15" fill="orange" />
+            <circle cx="30" cy="20" r="10" fill="yellow" />
+            <circle cx="30" cy="20" r="5" fill="white" />
+            <path d="M15,10 L25,25 M45,10 L35,25 M15,35 L25,20 M45,35 L35,20" stroke="red" stroke-width="2" />
+          </g>
+          <g v-else transform="rotate(270 30 20)">
+            <!-- 正常火箭 (水平放置) -->
+            <path d="M20,0 L10,30 L20,25 L30,30 Z" fill="red" stroke="darkred" />
+            <path d="M10,30 L10,40 L30,40 L30,30" fill="gray" stroke="darkgray" />
+            <path d="M15,40 L15,50 L25,50 L25,40" fill="darkgray" stroke="gray" />
+            <g v-if="gameState === 'flying'">
+              <path d="M15,50 L10,60 L20,55 L30,60 L25,50" fill="orange" />
+              <path d="M17,50 L15,58 L20,55 L25,58 L23,50" fill="yellow" />
+            </g>
+          </g>
+        </svg>
+      </div>
+      
+      <!-- 倍率顯示 -->
+      <div class="multiplier">
+        {{ gameState === 'exploded' ? '爆炸!' : multiplier.toFixed(2) + 'x' }}
+      </div>
+    </div>
+    
+    <!-- 控制區 -->
+    <div class="controls">
+      <div class="balance-display">
+        <div>餘額: ${{ balance.toFixed(2) }}</div>
+        <div>總盈利: ${{ profit.toFixed(2) }}</div>
+      </div>
+      
+      <div v-if="bet > 0">
+        <div style="text-align: center; margin-bottom: 8px;">
+          已投注: ${{ bet }} (潛在回報: ${{ (bet * multiplier).toFixed(2) }})
+        </div>
+        <button 
+          class="cashout" 
+          @click="cashOut" 
+          :disabled="gameState !== 'flying'"
+        >
+          提取 (${{ (bet * multiplier).toFixed(2) }})
+        </button>
+      </div>
+      <div v-else class="bet-input">
+        <input 
+          type="number" 
+          v-model="betInput" 
+          placeholder="輸入投注金額" 
+          :disabled="gameState !== 'waiting'"
+        />
+        <button 
+          @click="placeBet" 
+          :disabled="gameState !== 'waiting' || betInput <= 0 || betInput > balance"
+        >
+          投注
+        </button>
+      </div>
+      
+      <button 
+        v-if="gameState === 'waiting' && bet === 0" 
+        class="start-button" 
+        @click="startGame"
+      >
+        開始遊戲
+      </button>
+    </div>
+    
+    <!-- 歷史紀錄 -->
+    <div v-if="history.length > 0" class="history">
+      <h3 style="margin-top: 0;">投注記錄</h3>
+      <div style="max-height: 150px; overflow-y: auto;">
+        <div v-for="(item, index) in history" :key="index" class="history-item">
+          <span>投注: ${{ item.bet }}</span>
+          <span>倍率: {{ item.multiplier.toFixed(2) }}x</span>
+          <span :class="item.profit >= 0 ? 'profit-positive' : 'profit-negative'">
+            {{ item.profit >= 0 ? '+' : '' }}{{ item.profit.toFixed(2) }}
+          </span>
+          <span :class="item.result === '成功' ? 'result-success' : 'result-explosion'">
+            {{ item.result }}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { createApp, ref, computed, onMounted, onBeforeUnmount } = Vue;
+    
+    createApp({
+      setup() {
+        const gameState = ref('waiting'); // waiting, flying, exploded
+        const multiplier = ref(1);
+        const bet = ref(0);
+        const betInput = ref('');
+        const balance = ref(1000);
+        const profit = ref(0);
+        const history = ref([]);
+        
+        // 火箭位置控制
+        const rocketLeftPosition = ref(15); // 從左側15%位置開始
+        const rocketVerticalPosition = ref(10); // 初始高度
+        const showMovingBackground = ref(false); // 控制背景是否開始移動
+        const cloudPosition = ref(0); // 雲朵位移量
+        const starPosition = ref(0); // 星星位移量
+        
+        // 雲朵位置生成
+        const generateClouds = () => {
+          const cloudsArray = [];
+          const screenWidth = window.innerWidth;
+          const gameWidth = Math.min(screenWidth - 40, 500);
+          
+          for (let i = 0; i < 8; i++) {
+            cloudsArray.push({
+              x: (i * gameWidth / 4) + Math.random() * 50,
+              y: 50 + Math.random() * 150
+            });
+          }
+          return cloudsArray;
+        };
+        
+        const clouds = ref(generateClouds());
+        
+        // 生成星星
+        const generateStars = () => {
+          const starsArray = [];
+          const screenWidth = window.innerWidth;
+          const gameWidth = Math.min(screenWidth - 40, 500);
+          
+          for (let i = 0; i < 50; i++) {
+            starsArray.push({
+              x: Math.random() * (gameWidth * 2), // 創建更廣闊的星空範圍
+              y: Math.random() * 300,
+              size: Math.random() * 2 + 1,
+              brightness: Math.random() * 0.5 + 0.5
+            });
+          }
+          return starsArray;
+        };
+        
+        const stars = ref(generateStars());
+        
+        // 太空背景的透明度，根據倍率計算
+        const spaceOpacity = computed(() => {
+          if (multiplier.value <= 2) return 0;
+          const opacity = (multiplier.value - 2) / 3; // 2x到5x倍率，太空背景從0到1透明度
+          return Math.min(opacity, 1);
+        });
+        
+        let gameLoopId = null;
+        let explosionTime = null;
+        let startTime = null;
+        let lastTimestamp = 0;
+        
+        // 計算指數非線性曲線
+        const calculateMultiplier = (elapsed) => {
+          return 1 + Math.pow(elapsed / 1000, 1.5) * 0.2;
+        };
+        
+        // 開始遊戲
+        const startGame = () => {
+          if (gameState.value !== 'waiting') return;
+          
+          // 隨機決定爆炸時間 (2-10秒)
+          const minTime = 2000;
+          const maxTime = 10000;
+          explosionTime = Math.random() * (maxTime - minTime) + minTime;
+          
+          gameState.value = 'flying';
+          startTime = performance.now();
+          lastTimestamp = performance.now();
+          
+          // 重置位置
+          rocketLeftPosition.value = 15; // 開始在左側
+          rocketVerticalPosition.value = 10;
+          showMovingBackground.value = false;
+          cloudPosition.value = 0;
+          starPosition.value = 0;
+          
+          gameLoopId = requestAnimationFrame(gameLoop);
+        };
+        
+        // 遊戲循環
+        const gameLoop = (timestamp) => {
+          const elapsed = timestamp - startTime;
+          const deltaTime = timestamp - lastTimestamp;
+          lastTimestamp = timestamp;
+          
+          // 計算新的倍率
+          const newMultiplier = calculateMultiplier(elapsed);
+          multiplier.value = parseFloat(newMultiplier.toFixed(2));
+          
+          // 火箭橫向移動控制
+          if (elapsed < 2000) {
+            // 前2秒，火箭從左側向中間移動
+            const progress = Math.min(elapsed / 2000, 1);
+            rocketLeftPosition.value = 15 + progress * 45; // 從15%移動到60%
+            rocketVerticalPosition.value = 10 + progress * 20; // 同時稍微上升
+          } else if (elapsed < 3000) {
+            // 2-3秒，火箭從中間向右側移動
+            const progress = Math.min((elapsed - 2000) / 1000, 1);
+            rocketLeftPosition.value = 60 + progress * 10; // 從60%移動到70%
+            rocketVerticalPosition.value = 30 + progress * 10; // 繼續上升
+            
+            // 當火箭到達中間位置後，開始背景移動
+            if (!showMovingBackground.value && progress > 0.5) {
+              showMovingBackground.value = true;
+            }
+          } else {
+            // 3秒後，火箭固定在右側70%位置，背景開始持續移動
+            rocketLeftPosition.value = 70;
+            rocketVerticalPosition.value = 40;
+          }
+          
+          // 如果背景開始移動
+          if (showMovingBackground.value) {
+            // 更新雲朵位置 - 速度隨倍率增加
+            const cloudSpeed = 0.05 * Math.min(multiplier.value, 5);
+            cloudPosition.value += deltaTime * cloudSpeed;
+            
+            // 更新星星位置
+            if (multiplier.value > 2) {
+              const starSpeed = 0.03 * Math.min(multiplier.value - 2, 3);
+              starPosition.value += deltaTime * starSpeed;
+            }
+          }
+          
+          // 檢查是否爆炸
+          if (elapsed >= explosionTime) {
+            explodeRocket();
+            return;
+          }
+          
+          gameLoopId = requestAnimationFrame(gameLoop);
+        };
+        
+        // 火箭爆炸
+        const explodeRocket = () => {
+          gameState.value = 'exploded';
+          
+          // 將未收回的投注歸零
+          if (bet.value > 0) {
+            history.value.push({
+              bet: bet.value,
+              multiplier: multiplier.value,
+              profit: -bet.value,
+              result: '爆炸'
+            });
+            bet.value = 0;
+          }
+          
+          // 3秒後重置遊戲
+          setTimeout(resetGame, 3000);
+        };
+        
+        // 重置遊戲
+        const resetGame = () => {
+          gameState.value = 'waiting';
+          multiplier.value = 1;
+          rocketLeftPosition.value = 15;
+          rocketVerticalPosition.value = 10;
+          showMovingBackground.value = false;
+          cloudPosition.value = 0;
+          starPosition.value = 0;
+          
+          // 重置雲朵和星星位置
+          clouds.value = generateClouds();
+          stars.value = generateStars();
+        };
+        
+        // 下注
+        const placeBet = () => {
+          if (gameState.value !== 'waiting' || betInput.value <= 0 || betInput.value > balance.value) return;
+          
+          const betAmount = parseFloat(betInput.value);
+          bet.value = betAmount;
+          balance.value -= betAmount;
+          betInput.value = '';
+          
+          // 自動開始遊戲
+          if (gameState.value === 'waiting') {
+            startGame();
+          }
+        };
+        
+        // 提取投注
+        const cashOut = () => {
+          if (gameState.value !== 'flying' || bet.value <= 0) return;
+          
+          const winnings = bet.value * multiplier.value;
+          const currentProfit = winnings - bet.value;
+          
+          balance.value += winnings;
+          profit.value += currentProfit;
+          
+          history.value.push({
+            bet: bet.value,
+            multiplier: multiplier.value,
+            profit: currentProfit,
+            result: '成功'
+          });
+          
+          bet.value = 0;
+        };
+        
+        // 處理窗口大小變化時更新元素位置
+        const handleResize = () => {
+          clouds.value = generateClouds();
+          stars.value = generateStars();
+        };
+        
+        onMounted(() => {
+          window.addEventListener('resize', handleResize);
+        });
+        
+        // 清除事件監聽和遊戲循環
+        onBeforeUnmount(() => {
+          window.removeEventListener('resize', handleResize);
+          if (gameLoopId) {
+            cancelAnimationFrame(gameLoopId);
+          }
+        });
+        
+        return {
+          gameState,
+          multiplier,
+          bet,
+          betInput,
+          balance,
+          profit,
+          history,
+          rocketLeftPosition,
+          rocketVerticalPosition,
+          clouds,
+          stars,
+          cloudPosition,
+          starPosition,
+          spaceOpacity,
+          showMovingBackground,
+          startGame,
+          placeBet,
+          cashOut
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
